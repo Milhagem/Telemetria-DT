@@ -1,13 +1,16 @@
 #include <Arduino.h>
+#include "INA.hpp"
+#include "SD.hpp"
 
 void setup() {
     Serial.begin(115200);
-    delay(2000);
 
-    Serial.println("ESP32 funcionando!");
+    iniciarINA();
+    iniciarSD();
+
+    criarTaskSD();
+    criarTaskINA();
 }
 
 void loop() {
-    Serial.println("Teste de funcionamento");
-    delay(1000);
 }
