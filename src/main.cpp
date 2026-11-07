@@ -13,13 +13,13 @@ void setup() {
     bool sdOK  = iniciarSD();
 
     if (inaOK && sdOK) {
-        ledSistemaVerde();
+        ledVerde();
     }
     else if (inaOK || sdOK) {
-        ledSistemaAmarelo();
+        ledAmarelo();
     }
     else {
-        ledSistemaVermelho();
+        ledVermelho();
     }
 
     if (inaOK && sdOK) {

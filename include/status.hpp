@@ -2,8 +2,8 @@
 
 void iniciarLEDs();
 
-void ledSistemaVermelho();
+void ledVermelho();
 
-void ledSistemaVerde();
+void ledVerde();
 
-void ledSistemaAmarelo(); // Vermelho e verde ao mesmo tempo, sinal intermediário
+void ledAmarelo(); // Vermelho e verde ao mesmo tempo, sinal intermediário
