@@ -1,6 +1,6 @@
 #pragma once
 
-void iniciarSD();
+bool iniciarSD();
 /*É a função q vai inicializar o SD, ver se conectou no ESP, criar/abrir um arquivo e criar a queue SD */
 
 void criarTaskSD();

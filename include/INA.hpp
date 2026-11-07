@@ -1,6 +1,6 @@
 #pragma once
 
-void iniciarINA();
+bool iniciarINA();
 /* esse função vai ser todos os parâmetros que são necessários para configurar o INA, como:
 corrente máxima, valor do shunt, tempo de conversão, media de amostras(provavelmente vai ser 1 apenas), 
 ADCrange e configuração do alert, basicamenente oq foi feito no código de teste */
