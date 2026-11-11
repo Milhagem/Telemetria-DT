@@ -6,4 +6,4 @@ void ledVermelho();
 
 void ledVerde();
 
-void ledAmarelo(); // Vermelho e verde ao mesmo tempo, sinal intermediário
+void ledAmarelo(); // Vermelho e verde ao mesmo tempo, sinal intermediárioa

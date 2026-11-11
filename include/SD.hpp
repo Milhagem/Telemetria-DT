@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Arduino.h>
 bool iniciarSD();
 /*É a função q vai inicializar o SD, ver se conectou no ESP, criar/abrir um arquivo e criar a queue SD */
 
