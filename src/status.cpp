@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include "status.hpp"
 
-constexpr uint8_t LED_R = 4;
-constexpr uint8_t LED_G = 5;
+constexpr uint8_t LED_R = 42;
+constexpr uint8_t LED_G = 41;
 
 void iniciarLEDs() {
 

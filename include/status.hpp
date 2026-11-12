@@ -1,9 +1,10 @@
 #pragma once
 
+#pragma once
+
 void iniciarLEDs();
 
 void ledVermelho();
-
 void ledVerde();
-
-void ledAmarelo(); // Vermelho e verde ao mesmo tempo, sinal intermediárioa
+void ledAmarelo();
+void ledDesligado();

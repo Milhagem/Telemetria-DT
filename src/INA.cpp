@@ -8,52 +8,38 @@
 #include "queues.hpp"
 
 constexpr uint8_t ALERT_PIN = 7;
-constexpr uint8_t SDA_PIN = 8;
-constexpr uint8_t SCL_PIN = 9;
+constexpr uint8_t SDA_PIN   = 8;
+constexpr uint8_t SCL_PIN   = 9;
 
-Adafruit_INA228 ina228;  //cria um objeto da biblioteca do INA
-TaskHandle_t handleINA = nullptr; //identificação da Task
+Adafruit_INA228 ina228;
+TaskHandle_t handleINA = nullptr;
 
 
-// INICIALIZAÇÃO DO INA228
+// Inicializa e configura o INA228
 bool iniciarINA() {
 
-    // Endereço I2C do INA228
     constexpr uint8_t ENDERECO_INA = 0x40;
 
-    // Valor do shunt
-    constexpr float VALOR_SHUNT_OHM = 0.001f;
+    constexpr float VALOR_SHUNT_OHM = 0.00105f;
+    constexpr float CORRENTE_MAX_A  = 30.0f;
 
-    // Corrente máxima configurada
-    constexpr float CORRENTE_MAX_A = 30.0f;
-
-    //Faixa do ADC do shunt
-    // 0 = ±163,84 mV
-    // 1 = ±40,96 mV
     constexpr uint8_t ADC_RANGE = 1;
-
-    //Tempo de conversão
-    // 540 us para shunt + 540 us para VBUS
-    // ≈ 926 ciclos/s
     constexpr auto TEMPO_CONVERSAO = INA228_TIME_540_us;
+    constexpr auto AVERAGING = INA228_COUNT_1; //sem média entre as amostras
+    constexpr auto MODO_CONVERSAO = INA228_MODE_CONT_BUS_SHUNT; //Conversão contínua de VBUS + shunt
 
-    //media entre as amostras(não usamos pq queremos mais definição)
-    constexpr auto AVERAGING = INA228_COUNT_1;
 
-    //Modo de conversão contínua de shunt + VBUS
-    constexpr auto MODO_CONVERSAO = INA228_MODE_CONT_BUS_SHUNT;
-
-    // Inicializa o barramento I2C
-    if (!Wire.begin(SDA_PIN, SCL_PIN, 400000)) { //seta os pinos para o I²C, e fixa em 400kHz
+    // Inicializa I2C em 400 kHz
+    if (!Wire.begin(SDA_PIN, SCL_PIN, 400000)) {
         return false;
     }
 
-    // Inicializa o INA228 no endereço configurado
+    // Inicializa INA228
     if (!ina228.begin(ENDERECO_INA)) {
         return false;
     }
 
-    // Configura faixa do ADC
+    // Configurações do INA228
     ina228.setADCRange(ADC_RANGE);
 
     ina228.setShunt(VALOR_SHUNT_OHM, CORRENTE_MAX_A);
@@ -66,75 +52,98 @@ bool iniciarINA() {
 
     ina228.setMode(MODO_CONVERSAO);
 
+    // ALERT ativo em LOW e modo transparente
+    ina228.setAlertLatch(INA228_ALERT_LATCH_TRANSPARENT);
+
+    ina228.setAlertPolarity(INA228_ALERT_POLARITY_NORMAL);
+
+    // Zera energia acumulada
     ina228.resetAccumulators();
 
     return true;
 }
 
+
+// ISR chamada quando ALERT vai de HIGH para LOW
 void IRAM_ATTR alertaINA() {
 
-    if (handleINA == nullptr) { //retorna se a task está vazia/n criada
+    if (handleINA == nullptr) {
         return;
     }
 
-    BaseType_t taskAcordada = pdFALSE; //variável para ver se a Task está acordada
+    BaseType_t taskAcordada = pdFALSE;
 
-    //função do FreeRTOS e serve para enviar uma notificação para uma Task
+    //Acorda a TaskINA
     vTaskNotifyGiveFromISR(handleINA, &taskAcordada);
 
-    if (taskAcordada == pdTRUE) { //serve para dar prioridade à taskINA, para q n ocorra um atraso entre o sinal de ALERT, e a leitura dos dados
+    // Se necessário, troca imediatamente para a TaskINA
+    if (taskAcordada == pdTRUE) {
         portYIELD_FROM_ISR();
     }
 }
 
+
+// Task responsável pela aquisição
 void taskINA(void *parameter) {
 
-    Amostra amostra; //struct de amostras
+    Amostra amostra;
 
     while (true) {
 
-        // Desliga a task enquanto a notificação do  vTaskNotifyGiveFromISRn chega
+        // Espera uma nova conversão do INA228
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        // Marca o instante em que a amostra ficou disponível para o ESP
+        // Marca o instante da amostra
         amostra.tempo_us = esp_timer_get_time();
 
-        // Lê os dados que o INA228 já converteu
-        amostra.corrente_A =
-            ina228.getCurrent_mA() / 1000.0f;
+        // Limpa CNVRF e libera o ALERT para a próxima conversão
+        ina228.conversionReady();
 
-        amostra.tensao_V =
-            ina228.getBusVoltage_V();
+        amostra.corrente_A = ina228.getCurrent_mA() / 1000.0f;
 
-        amostra.potencia_W =
-            ina228.getPower_mW() / 1000.0f;
+        amostra.tensao_V = ina228.getBusVoltage_V();
 
-        amostra.energia_J =
-            ina228.readEnergy();
+        amostra.potencia_W = ina228.getPower_mW() / 1000.0f;
 
-        // Envia uma cópia da amostra para a fila do SD
-        if (xQueueSend(queueSD, &amostra, 0) != pdPASS) {}// futuramente incrementar contador de amostras perdidas
+        amostra.energia_J = ina228.readEnergy();
+
+        // Envia a amostra para a queue do SD
+        if (xQueueSend(queueSD, &amostra, 0) != pdPASS
+        ) {
+            // Futuramente: contador de amostras perdidas
+        }
     }
 }
 
 
-// Função q implementa a estrutura xTaskCreate do FreeRTOS, a qual cria a task
+// Cria a TaskINA e configura a interrupção do ALERT
 void criarTaskINA() {
 
     BaseType_t resultado = xTaskCreate(
-        taskINA,       // Função que a Task vai executar
-        "Task INA",    // Nome da Task
-        4096,          // Stack
-        nullptr,       // Parâmetro passado para a Task
-        3,             // Prioridade
-        &handleINA     // Guarda o handle da Task
+        taskINA,
+        "Task INA",
+        4096,
+        nullptr,
+        3,
+        &handleINA
     );
 
     if (resultado != pdPASS) {
         return;
     }
 
-        pinMode(ALERT_PIN, INPUT);
+    pinMode(ALERT_PIN, INPUT);
 
-    attachInterrupt(digitalPinToInterrupt(ALERT_PIN), alertaINA, FALLING); //recebe o sinal do pino alert, e se ele desce para GND/FALLING, roda a função alertaINA
+    // Detecta HIGH -> LOW no ALERT
+    attachInterrupt(
+        digitalPinToInterrupt(ALERT_PIN),
+        alertaINA,
+        FALLING
+    );
+
+    /*
+     * Limpa um possível CNVRF que já tenha sido
+     * gerado antes da interrupção ser configurada.
+     */
+    ina228.conversionReady();
 }
